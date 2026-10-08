@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Visita Técnica Ybera</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1F7F7B">
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{--teal:#1F7F7B;--teal-d:#17605d;--tint:#E6F3F2;--ink:#1d2a2a;--mute:#6B6A6C;--line:#d5dcdc;--bg:#f4f7f7;--card:#fff;--danger:#b3261e}
+@media(prefers-color-scheme:dark){:root{--ink:#e8eeee;--mute:#9aa5a5;--line:#2f3b3b;--bg:#121818;--card:#1a2222;--tint:#1d3331}}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:90px}
+header{background:var(--teal);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px}
+header h1{font-size:17px;margin:0;flex:1}header small{opacity:.8;display:block;font-weight:400;font-size:12px}
+button,.btn{font:inherit;border:0;border-radius:8px;padding:10px 14px;background:var(--teal);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--teal);border:1px solid var(--teal)}
+header button{background:rgba(255,255,255,.18)}
+button.del{background:transparent;color:var(--danger);padding:6px 10px}
+main{max-width:760px;margin:0 auto;padding:12px 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+.sec{display:flex;align-items:center;gap:10px;background:var(--teal);color:#fff;margin:22px -4px 8px;padding:8px 12px;border-radius:8px;font-weight:600}
+label{display:block;font-size:12px;color:var(--mute);margin:10px 0 3px;text-transform:uppercase;letter-spacing:.03em}
+input,textarea,select{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+textarea{min-height:80px;resize:vertical}
+.row{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;background:var(--tint)}
+.row .g{display:grid;gap:8px;grid-template-columns:1fr 1fr}.row .g>.w{grid-column:1/-1}
+.row label{margin-top:4px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer}
+.item b{display:block}.item span{color:var(--mute);font-size:13px}
+.tag{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--tint);color:var(--teal)}
+.photo img{width:100%;border-radius:8px;display:block;margin-bottom:6px}
+.pick{display:block;text-align:center;border:2px dashed var(--teal);color:var(--teal);border-radius:8px;padding:22px;margin:6px 0;cursor:pointer}
+.sig canvas{width:100%;height:130px;border:1px dashed var(--mute);border-radius:8px;background:#fff;touch-action:none}
+.bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;justify-content:center;z-index:6}
+.bar>*{flex:1;max-width:240px}
+.status label{display:flex;gap:8px;align-items:center;font-size:15px;color:var(--ink);text-transform:none;margin:6px 0}
+.status input{width:auto}
+.empty{text-align:center;color:var(--mute);padding:40px 0}
+#print{display:none}
+@media print{
+ body{background:#fff;color:#000;padding:0}header,main,.bar{display:none!important}#print{display:block}
+ #print{font-size:11pt}#print h1{color:#1F7F7B;margin:0}#print h2{background:#1F7F7B;color:#fff;font-size:12pt;padding:4px 8px;margin:16px 0 6px;break-after:avoid}
+ #print table{width:100%;border-collapse:collapse;margin-bottom:6px}#print td,#print th{border:1px solid #bbb;padding:4px 6px;vertical-align:top;text-align:left}
+ #print th{background:#E6F3F2;font-size:9pt;text-transform:uppercase}
+ .ph{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ph div{break-inside:avoid;border:1px solid #bbb;padding:4px}.ph img{width:100%}
+ .sg{display:grid;grid-template-columns:1fr 1fr;gap:20px;break-inside:avoid}.sg img{height:70px}
+ .foot{color:#6B6A6C;font-size:9pt;margin-top:12px}
+}
+</style>
+</head>
+<body>
+<header>
+ <button id="back" hidden>←</button>
+ <h1 id="title">Visitas técnicas<small>YBERA GROUP • Relatório técnico</small></h1>
+ <button id="cfg" title="Configurar envio">⚙</button><button id="imp" title="Importar">⇪</button><button id="exp" title="Exportar">⇩</button>
+</header>
+<main id="app"></main>
+<div class="bar" id="bar"></div>
+<div id="print"></div>
+<input type="file" id="impf" accept="application/json" hidden>
+<script>
+const $=(s,e=document)=>e.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10);
+/* ---------- IndexedDB ---------- */
+let db;
+const open=()=>new Promise((ok,er)=>{const r=indexedDB.open('vistoria_ybera',1);r.onupgradeneeded=()=>r.result.createObjectStore('r',{keyPath:'id'});r.onsuccess=()=>{db=r.result;ok()};r.onerror=()=>er(r.error)});
+const tx=(m,f)=>new Promise((ok,er)=>{const t=db.transaction('r',m);const q=f(t.objectStore('r'));t.oncomplete=()=>ok(q.result);t.onerror=()=>er(t.error)});
+const all=()=>tx('readonly',s=>s.getAll());
+const put=r=>tx('readwrite',s=>s.put(r));
+const rm=id=>tx('readwrite',s=>s.delete(id));
+/* ---------- modelo ---------- */
+const blank=async()=>{const n=(await all()).length+1;return{id:uid(),num:`VT-${new Date().getFullYear()}-${String(n).padStart(3,'0')}`,data:new Date().toISOString().slice(0,10),ini:'',fim:'',local:'',empresa:'',resp:'',solic:'',objeto:'',escopo:'',
+ ativ:[{a:'',r:''}],mat:[{d:'',q:'',o:''}],fotos:[],testes:[{t:'',r:'',s:'Pendente'}],pend:[{d:'',r:'',p:''}],concl:'',sit:'',sigT:'',sigS:'',nomeT:'',nomeS:'',updated:Date.now()}};
+let cur=null;
+/* ---------- lista ---------- */
+async function list(){
+ cur=null;$('#back').hidden=true;$('#title').innerHTML='Visitas técnicas<small>YBERA GROUP • Relatório técnico</small>';
+ const rs=(await all()).sort((a,b)=>b.updated-a.updated);
+ $('#app').innerHTML=rs.length?rs.map(r=>`<div class="card item" data-id="${r.id}"><div><b>${esc(r.num)} — ${esc(r.local)||'Sem local'}</b><span>${r.data.split('-').reverse().join('/')} • ${esc(r.objeto)||'—'}</span></div><span class="tag">${r.enviado?'✔ Enviado':(r.sit||'Em preenchimento')}</span></div>`).join(''):'<div class="empty">Nenhuma visita registrada ainda.</div>';
+ $('#bar').innerHTML='<button id="new">+ Nova visita</button>';
+ $('#new').onclick=async()=>{cur=await blank();form()};
+ document.querySelectorAll('.item').forEach(e=>e.onclick=async()=>{cur=(await all()).find(r=>r.id===e.dataset.id);form()});
+}
+/* ---------- formulário ---------- */
+const F=(k,l,t='text')=>`<label>${l}</label><input type="${t}" data-k="${k}" value="${esc(cur[k])}">`;
+const T=(k,l)=>`<label>${l}</label><textarea data-k="${k}">${esc(cur[k])}</textarea>`;
+const S=(n,t)=>`<div class="sec"><span>${n}</span>${t}</div>`;
+function rowsHtml(list,fields,addLabel){
+ return cur[list].map((x,i)=>`<div class="row" data-l="${list}" data-i="${i}"><div class="g">${fields.map(f=>`<div class="${f.w?'w':''}"><label>${f.l}</label>${f.sel?`<select data-f="${f.k}">${f.sel.map(o=>`<option ${x[f.k]==o?'selected':''}>${o}</option>`).join('')}</select>`:f.ta?`<textarea data-f="${f.k}">${esc(x[f.k])}</textarea>`:`<input data-f="${f.k}" ${f.t?`type="${f.t}"`:''} value="${esc(x[f.k])}">`}</div>`).join('')}</div><button class="del" data-rm>Remover</button></div>`).join('')+`<button class="ghost" data-add="${list}">+ ${addLabel}</button>`;
+}
+function form(){
+ $('#back').hidden=false;$('#title').innerHTML=`${esc(cur.num)}<small>Relatório de visita técnica</small>`;
+ const c=cur;
+ $('#app').innerHTML=`
+ ${S('01','Identificação da visita')}<div class="card">
+ ${F('num','Nº do relatório / chamado')}${F('data','Data da visita','date')}
+ <div class="row" style="background:none;border:0;padding:0"><div class="g">${`<div>${F('ini','Início','time')}</div><div>${F('fim','Fim','time')}</div>`}</div></div>
+ ${F('local','Local / unidade / setor')}${F('empresa','Empresa prestadora / equipe')}${F('resp','Responsável técnico (nome e contato)')}${F('solic','Solicitante / acompanhante (nome e área)')}${T('objeto','Objeto da visita (equipamento, sistema ou serviço)')}</div>
+ ${S('02','Objetivo e escopo')}<div class="card">${T('escopo','Motivo da visita, necessidade identificada e escopo previsto')}</div>
+ ${S('03','Atividades executadas')}<div class="card">${rowsHtml('ativ',[{k:'a',l:'Atividade / procedimento',ta:1,w:1},{k:'r',l:'Resultado / evidência',ta:1,w:1}],'Atividade')}</div>
+ ${S('04','Materiais, peças ou recursos')}<div class="card">${rowsHtml('mat',[{k:'d',l:'Descrição',w:1},{k:'q',l:'Qtd.'},{k:'o',l:'Observação'}],'Material')}</div>
+ ${S('05','Evidências fotográficas')}<div class="card">${c.fotos.map((p,i)=>`<div class="row photo" data-l="fotos" data-i="${i}"><img src="${p.img}"><label>Momento</label><select data-f="m">${['Antes','Durante','Depois'].map(o=>`<option ${p.m==o?'selected':''}>${o}</option>`).join('')}</select><label>O que a foto comprova</label><textarea data-f="d">${esc(p.d)}</textarea><button class="del" data-rm>Remover</button></div>`).join('')}
+ <label class="pick">📷 Tirar / escolher foto<input type="file" id="foto" accept="image/*" multiple hidden></label></div>
+ ${S('06','Testes, validações e resultados')}<div class="card">${rowsHtml('testes',[{k:'t',l:'Teste / verificação',w:1},{k:'r',l:'Resultado'},{k:'s',l:'Status',sel:['Aprovado','Pendente','Reprovado']}],'Teste')}</div>
+ ${S('07','Pendências, riscos e próximos passos')}<div class="card">${rowsHtml('pend',[{k:'d',l:'Pendência / recomendação',ta:1,w:1},{k:'r',l:'Responsável'},{k:'p',l:'Prazo',t:'date'}],'Pendência')}</div>
+ ${S('08','Conclusão da visita')}<div class="card">${T('concl','Condição encontrada, serviços concluídos, limitações e situação final')}
+ <label>Situação do serviço</label><div class="status">${['Concluído','Parcialmente concluído','Pendente de retorno'].map(s=>`<label><input type="radio" name="sit" value="${s}" ${c.sit==s?'checked':''}> ${s}</label>`).join('')}</div></div>
+ ${S('09','Ciência e aprovação')}<div class="card">
+ ${['T:Responsável técnico','S:Representante / solicitante'].map(x=>{const[k,l]=x.split(':');return`<div class="sig" data-s="${k}"><label>${l} — nome</label><input data-k="nome${k}" value="${esc(c['nome'+k])}"><label>Assinatura</label><canvas></canvas><button class="ghost" data-clr>Limpar</button></div>`}).join('')}
+ <p style="font-size:12px;color:var(--mute)">O registro de ciência confirma o recebimento do relatório, não necessariamente a aceitação de pendências.</p></div>`;
+ $('#bar').innerHTML='<button class="ghost" id="del">Excluir</button><button class="ghost" id="pdf">PDF</button><button id="send">Enviar ao SharePoint</button>';
+ bind();
+}
+function bind(){
+ const a=$('#app');
+ a.oninput=e=>{const t=e.target;
+  if(t.dataset.k)cur[t.dataset.k]=t.value;
+  else if(t.dataset.f){const r=t.closest('[data-l]');cur[r.dataset.l][+r.dataset.i][t.dataset.f]=t.value}
+  else if(t.name==='sit')cur.sit=t.value;
+  save()};
+ a.onclick=e=>{const t=e.target;
+  if(t.dataset.add){const m={ativ:{a:'',r:''},mat:{d:'',q:'',o:''},testes:{t:'',r:'',s:'Pendente'},pend:{d:'',r:'',p:''}};cur[t.dataset.add].push(m[t.dataset.add]);keep()}
+  if(t.dataset.rm!==undefined){const r=t.closest('[data-l]');cur[r.dataset.l].splice(+r.dataset.i,1);if(!cur[r.dataset.l].length&&r.dataset.l!=='fotos')cur[r.dataset.l].push({});keep()}
+ };
+ $('#foto').onchange=async e=>{for(const f of e.target.files)cur.fotos.push({img:await shrink(f),m:'Durante',d:''});keep()};
+ document.querySelectorAll('.sig').forEach(s=>sig(s));
+ $('#del').onclick=async()=>{if(confirm('Excluir esta visita?')){await rm(cur.id);list()}};
+ $('#pdf').onclick=async()=>{const f=await makePdf(cur);await deliver(f)};
+ $('#send').onclick=sendSP;
+}
+const keep=async()=>{const y=scrollY;await save();form();scrollTo(0,y)};
+let st;const save=()=>{cur.updated=Date.now();clearTimeout(st);return put(cur)};
+const shrink=f=>new Promise(ok=>{const i=new Image();i.onload=()=>{const s=Math.min(1,1280/Math.max(i.width,i.height));const c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;c.getContext('2d').drawImage(i,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',.75))};i.src=URL.createObjectURL(f)});
+/* ---------- assinatura ---------- */
+function sig(box){
+ const cv=$('canvas',box),k='sig'+box.dataset.s,x=cv.getContext('2d');
+ cv.width=cv.offsetWidth*2;cv.height=260;x.scale(2,2);x.lineWidth=2;x.lineCap='round';x.strokeStyle='#000';
+ if(cur[k]){const i=new Image();i.onload=()=>x.drawImage(i,0,0,cv.width/2,130);i.src=cur[k]}
+ let d=false;const p=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+ cv.onpointerdown=e=>{d=true;cv.setPointerCapture(e.pointerId);x.beginPath();x.moveTo(...p(e))};
+ cv.onpointermove=e=>{if(d){x.lineTo(...p(e));x.stroke()}};
+ cv.onpointerup=()=>{d=false;cur[k]=cv.toDataURL();save()};
+ $('[data-clr]',box).onclick=()=>{x.clearRect(0,0,cv.width,cv.height);cur[k]='';save()};
+}
+/* ---------- impressão ---------- */
+function buildPrint(){
+ const c=cur,br=d=>d?d.split('-').reverse().join('/'):'';
+ const tb=(h,rows)=>`<table><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</table>`;
+ const kv=[['Nº do relatório / chamado',c.num],['Data da visita',br(c.data)],['Horário',`${c.ini} às ${c.fim}`],['Local / unidade / setor',c.local],['Empresa prestadora / equipe',c.empresa],['Responsável técnico',c.resp],['Solicitante / acompanhante',c.solic],['Objeto da visita',c.objeto]];
+ $('#print').innerHTML=`<h1>RELATÓRIO DE VISITA TÉCNICA</h1><div style="color:#6B6A6C">YBERA GROUP • Registro de atividades realizadas, resultados, pendências e evidências fotográficas.</div>
+ <h2>01 | Identificação da visita</h2>${tb(['Informação','Preenchimento'],kv)}
+ <h2>02 | Objetivo e escopo</h2><p>${esc(c.escopo).replace(/\n/g,'<br>')}</p>
+ <h2>03 | Atividades executadas</h2>${tb(['Item','Atividade / procedimento','Resultado / evidência'],c.ativ.map((x,i)=>[String(i+1).padStart(2,'0'),x.a,x.r]))}
+ <h2>04 | Materiais, peças ou recursos utilizados</h2>${tb(['Descrição','Qtd.','Observação'],c.mat.map(x=>[x.d,x.q,x.o]))}
+ <h2>05 | Evidências fotográficas</h2><div class="ph">${c.fotos.map((p,i)=>`<div><b>FOTO ${String(i+1).padStart(2,'0')} | ${p.m}</b><img src="${p.img}"><br>${esc(p.d)}</div>`).join('')||'—'}</div>
+ <h2>06 | Testes, validações e resultados</h2>${tb(['Teste / verificação','Resultado','Status'],c.testes.map(x=>[x.t,x.r,x.s]))}
+ <h2>07 | Pendências, riscos e próximos passos</h2>${tb(['Pendência / recomendação','Responsável','Prazo'],c.pend.map(x=>[x.d,x.r,br(x.p)]))}
+ <h2>08 | Conclusão da visita</h2><p>${esc(c.concl).replace(/\n/g,'<br>')}</p><p>Situação do serviço: ${['Concluído','Parcialmente concluído','Pendente de retorno'].map(s=>(c.sit==s?'☒ ':'☐ ')+s).join('&nbsp;&nbsp;&nbsp;')}</p>
+ <h2>09 | Ciência e aprovação</h2><div class="sg">${[['T','Responsável técnico'],['S','Representante / solicitante']].map(([k,l])=>`<div><b>${l.toUpperCase()}</b><br>Nome: ${esc(c['nome'+k])}<br>${c['sig'+k]?`<img src="${c['sig'+k]}">`:'<br><br>'}<br>Assinatura ____________________<br>Data: ${br(c.data)}</div>`).join('')}</div>
+ <div class="foot">Observação: o registro de ciência confirma o recebimento do relatório, não necessariamente a aceitação de pendências.<br>Documento de registro técnico • Uso interno | Versão 1.0</div>`;
+ document.title=c.num;
+}
+
+/* ---------- PDF real (jsPDF) ---------- */
+const TEAL=[31,127,123],TINT=[230,243,242];
+async function makePdf(c){
+ const {jsPDF}=window.jspdf,d=new jsPDF({unit:'mm',format:'a4'}),W=210,M=14;let y=0;
+ const br=v=>v?v.split('-').reverse().join('/'):'';
+ const head=()=>{d.setFillColor(...TEAL);d.rect(0,0,W,10,'F');d.setTextColor(255);d.setFontSize(9);d.setFont('helvetica','bold');d.text('YBERA GROUP',M,6.5);d.text('RELATÓRIO TÉCNICO',W-M,6.5,{align:'right'});d.setTextColor(0)};
+ head();y=22;
+ d.setTextColor(...TEAL);d.setFontSize(18);d.text('RELATÓRIO DE VISITA TÉCNICA',M,y);d.setTextColor(107,106,108);d.setFontSize(9);d.setFont('helvetica','normal');
+ d.text('Registro de atividades realizadas, resultados, pendências e evidências fotográficas.',M,y+6);d.setTextColor(0);y+=14;
+ const need=h=>{if(y+h>282){d.addPage();head();y=18}};
+ const sec=(n,t)=>{need(20);d.setFillColor(...TEAL);d.rect(M,y,W-2*M,7,'F');d.setTextColor(255);d.setFont('helvetica','bold');d.setFontSize(11);d.text(`${n}  |  ${t}`,M+2,y+5);d.setTextColor(0);d.setFont('helvetica','normal');y+=10};
+ const tbl=(h,b,cw)=>{d.autoTable({startY:y,head:[h],body:b.length?b:[h.map(()=>'')],margin:{left:M,right:M,top:18},theme:'grid',styles:{fontSize:9,cellPadding:2,lineColor:[190,190,190]},headStyles:{fillColor:TINT,textColor:[31,127,123],fontStyle:'bold'},columnStyles:cw||{},didDrawPage:()=>{}});y=d.lastAutoTable.finalY+4};
+ const para=t=>{d.setFontSize(10);const l=d.splitTextToSize(t||'—',W-2*M);for(const x of l){need(6);d.text(x,M,y);y+=5}y+=3};
+ sec('01','Identificação da visita');
+ tbl(['INFORMAÇÃO','PREENCHIMENTO'],[['Nº do relatório / chamado',c.num],['Data da visita',br(c.data)],['Horário (início / fim)',`${c.ini||'--:--'} às ${c.fim||'--:--'}`],['Local / unidade / setor',c.local],['Empresa prestadora / equipe',c.empresa],['Responsável técnico',c.resp],['Solicitante / acompanhante',c.solic],['Objeto da visita',c.objeto]],{0:{cellWidth:55,fontStyle:'bold'}});
+ sec('02','Objetivo e escopo');para(c.escopo);
+ sec('03','Atividades executadas');tbl(['ITEM','ATIVIDADE / PROCEDIMENTO REALIZADO','RESULTADO / EVIDÊNCIA'],c.ativ.map((x,i)=>[String(i+1).padStart(2,'0'),x.a||'',x.r||'']),{0:{cellWidth:14}});
+ sec('04','Materiais, peças ou recursos utilizados');tbl(['DESCRIÇÃO','QUANTIDADE','OBSERVAÇÃO'],c.mat.map(x=>[x.d||'',x.q||'',x.o||'']),{1:{cellWidth:24}});
+ sec('05','Evidências fotográficas');
+ if(!c.fotos.length)para('Sem fotos registradas.');
+ const pw=(W-2*M-6)/2;let col=0,rowH=0;
+ for(let i=0;i<c.fotos.length;i++){const p=c.fotos[i],ip=d.getImageProperties(p.img),h=Math.min(pw*ip.height/ip.width,85),w=h*ip.width/ip.height;
+  const dl=d.splitTextToSize(p.d||'',pw-2);const bh=h+8+dl.length*4+2;
+  if(col===0)need(bh);
+  const x=M+col*(pw+6);
+  d.setDrawColor(190);d.rect(x,y,pw,bh);d.setFillColor(...TEAL);d.rect(x,y,pw,5.5,'F');d.setTextColor(255);d.setFontSize(8.5);d.setFont('helvetica','bold');d.text(`FOTO ${String(i+1).padStart(2,'0')}  |  ${p.m.toUpperCase()}`,x+2,y+4);
+  d.setTextColor(0);d.setFont('helvetica','normal');d.addImage(p.img,'JPEG',x+(pw-w)/2,y+6.5,w,h);d.setFontSize(8.5);d.text(dl,x+1.5,y+h+10.5);
+  rowH=Math.max(rowH,bh);col++;if(col===2||i===c.fotos.length-1){y+=rowH+4;col=0;rowH=0}}
+ sec('06','Testes, validações e resultados');tbl(['TESTE / VERIFICAÇÃO','RESULTADO','STATUS'],c.testes.map(x=>[x.t||'',x.r||'',x.s||'']),{2:{cellWidth:28}});
+ sec('07','Pendências, riscos e próximos passos');tbl(['PENDÊNCIA / RECOMENDAÇÃO','RESPONSÁVEL','PRAZO'],c.pend.map(x=>[x.d||'',x.r||'',br(x.p)]),{2:{cellWidth:26}});
+ sec('08','Conclusão da visita');para(c.concl);
+ need(10);d.setFont('helvetica','bold');d.text('Situação do serviço:  '+['Concluído','Parcialmente concluído','Pendente de retorno'].map(s=>(c.sit==s?'[X] ':'[  ] ')+s).join('    '),M,y);d.setFont('helvetica','normal');y+=9;
+ sec('09','Ciência e aprovação');need(55);
+ [['T','RESPONSÁVEL TÉCNICO'],['S','REPRESENTANTE / SOLICITANTE']].forEach(([k,l],i)=>{const x=M+i*(pw+6);d.setFillColor(...TEAL);d.rect(x,y,pw,6,'F');d.setTextColor(255);d.setFont('helvetica','bold');d.setFontSize(9);d.text(l,x+2,y+4.3);d.setTextColor(0);d.setFont('helvetica','normal');
+  d.text('Nome: '+(c['nome'+k]||''),x,y+13);if(c['sig'+k])d.addImage(c['sig'+k],'PNG',x,y+15,pw*0.8,pw*0.8/2);d.text('Assinatura: ____________________',x,y+40);d.text('Data: '+br(c.data),x,y+46)});
+ y+=52;d.setFontSize(8);d.setTextColor(107,106,108);d.text('Observação: o registro de ciência confirma o recebimento do relatório, não necessariamente a aceitação de pendências.',M,y);
+ const n=d.getNumberOfPages();for(let i=1;i<=n;i++){d.setPage(i);d.setFontSize(8);d.text(`Documento de registro técnico • Uso interno | Versão 1.0 | ${c.num} | pág. ${i}/${n}`,W/2,290,{align:'center'})}
+ const name=`${c.num}_${c.data}_${(c.local||'visita').replace(/[^\w]+/g,'_').slice(0,30)}.pdf`;
+ return{name,blob:d.output('blob'),b64:d.output('datauristring').split(',')[1]};
+}
+/* ---------- entrega: baixar / compartilhar / SharePoint ---------- */
+const ENDPOINT_PADRAO='';  // cole aqui a URL do fluxo Power Automate para já vir configurado
+const getUrl=()=>{try{return localStorage.sp_url||ENDPOINT_PADRAO}catch{return ENDPOINT_PADRAO}};
+async function deliver(f){
+ const file=new File([f.blob],f.name,{type:'application/pdf'});
+ if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:f.name});return}catch(e){if(e.name==='AbortError')return}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(f.blob);a.download=f.name;a.click();
+}
+async function sendSP(){
+ const url=getUrl();
+ if(!url){if(confirm('O envio ao SharePoint ainda não foi configurado. Configurar agora?'))cfg();return}
+ const b=$('#send');b.disabled=true;b.textContent='Gerando PDF…';
+ try{
+  const f=await makePdf(cur);b.textContent='Enviando…';
+  const body=JSON.stringify({fileName:f.name,numero:cur.num,data:cur.data,local:cur.local,responsavel:cur.resp,situacao:cur.sit,pdfBase64:f.b64});
+  let ok=false,conf=true;
+  try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},body});ok=r.ok;if(!r.ok)throw new Error('HTTP '+r.status)}
+  catch(e){if(e instanceof TypeError){ok=true;conf=false}else throw e}  // CORS: requisição foi enviada, mas a resposta não é legível
+  if(ok){cur.enviado=Date.now();await save();alert(conf?'Enviado ao SharePoint ✔':'Enviado, mas sem confirmação do servidor. Confira na pasta do SharePoint.')}
+ }catch(e){alert('Falha no envio: '+e.message+'\nO relatório continua salvo no aparelho; tente novamente com internet.')}
+ finally{b.disabled=false;b.textContent='Enviar ao SharePoint'}
+}
+function cfg(){const v=prompt('URL do fluxo Power Automate (HTTP) que salva o PDF na pasta do SharePoint:',getUrl());if(v!==null){try{localStorage.sp_url=v.trim()}catch{}}}
+$('#cfg').onclick=cfg;
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+/* ---------- backup ---------- */
+$('#back').onclick=list;
+$('#exp').onclick=async()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(await all())],{type:'application/json'}));a.download=`visitas_ybera_${new Date().toISOString().slice(0,10)}.json`;a.click()};
+$('#imp').onclick=()=>$('#impf').click();
+$('#impf').onchange=async e=>{try{const rs=JSON.parse(await e.target.files[0].text());for(const r of rs)await put(r);list()}catch{alert('Arquivo inválido')}};
+open().then(list);
+</script>
+</body>
+</html>
