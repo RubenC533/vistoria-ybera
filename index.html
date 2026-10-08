@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Visita Técnica Ybera</title>
 <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Visita Ybera">
 <meta name="theme-color" content="#1F7F7B">
 <script src="lib/jspdf.umd.min.js"></script>
 <script src="lib/jspdf.plugin.autotable.min.js"></script>
@@ -17,7 +22,7 @@ header{background:var(--teal);color:#fff;padding:14px 16px;position:sticky;top:0
 header h1{font-size:17px;margin:0;flex:1}header small{opacity:.8;display:block;font-weight:400;font-size:12px}
 button,.btn{font:inherit;border:0;border-radius:8px;padding:10px 14px;background:var(--teal);color:#fff;cursor:pointer}
 button.ghost{background:transparent;color:var(--teal);border:1px solid var(--teal)}
-header button{background:rgba(255,255,255,.18)}
+header button{background:rgba(255,255,255,.18)}#inst{font-size:13px;padding:8px 10px}
 button.del{background:transparent;color:var(--danger);padding:6px 10px}
 main{max-width:760px;margin:0 auto;padding:12px 16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
@@ -55,7 +60,7 @@ textarea{min-height:80px;resize:vertical}
 <header>
  <button id="back" hidden>←</button>
  <h1 id="title">Visitas técnicas<small>YBERA GROUP • Relatório técnico</small></h1>
- <button id="cfg" title="Configurar envio">⚙</button><button id="imp" title="Importar">⇪</button><button id="exp" title="Exportar">⇩</button>
+ <button id="inst" hidden>Instalar app</button><button id="cfg" title="Configurar envio">⚙</button><button id="imp" title="Importar">⇪</button><button id="exp" title="Exportar">⇩</button>
 </header>
 <main id="app"></main>
 <div class="bar" id="bar"></div>
@@ -126,12 +131,12 @@ function form(){
 }
 function bind(){
  const a=$('#app');
- a.oninput=e=>{const t=e.target;
+ a.oninput=e=>{if(!cur)return;const t=e.target;
   if(t.dataset.k)cur[t.dataset.k]=t.value;
   else if(t.dataset.f){const r=t.closest('[data-l]');cur[r.dataset.l][+r.dataset.i][t.dataset.f]=t.value}
   else if(t.name==='sit')cur.sit=t.value;
   save()};
- a.onclick=e=>{const t=e.target;
+ a.onclick=e=>{if(!cur)return;const t=e.target;
   if(t.dataset.add){const m={ativ:{a:'',r:''},mat:{d:'',q:'',o:''},testes:{t:'',r:'',s:'Pendente'},pend:{d:'',r:'',p:''}};cur[t.dataset.add].push(m[t.dataset.add]);keep()}
   if(t.dataset.rm!==undefined){const r=t.closest('[data-l]');cur[r.dataset.l].splice(+r.dataset.i,1);if(!cur[r.dataset.l].length&&r.dataset.l!=='fotos')cur[r.dataset.l].push({});keep()}
  };
@@ -239,6 +244,16 @@ async function sendSP(){
 }
 function cfg(){const v=prompt('URL do fluxo Power Automate (HTTP) que salva o PDF na pasta do SharePoint:',getUrl());if(v!==null){try{localStorage.sp_url=v.trim()}catch{}}}
 $('#cfg').onclick=cfg;
+/* ---------- instalar como app ---------- */
+let ev=null;const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();ev=e;$('#inst').hidden=false});
+window.addEventListener('appinstalled',()=>{$('#inst').hidden=true;ev=null});
+if(!standalone&&ios)$('#inst').hidden=false;
+$('#inst').onclick=async()=>{
+ if(ev){ev.prompt();await ev.userChoice;ev=null;$('#inst').hidden=true}
+ else alert('Para instalar no iPhone/iPad:\n1. Abra esta página no Safari.\n2. Toque no botão Compartilhar (quadrado com seta).\n3. Escolha "Adicionar à Tela de Início".\n4. Toque em Adicionar.')};
+
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 /* ---------- backup ---------- */
 $('#back').onclick=async()=>{if(cur&&!cur.local&&!cur.objeto&&!cur.escopo&&!cur.fotos.length&&!cur.enviado)await rm(cur.id);list()};
