@@ -112,7 +112,7 @@ function form(){
  ${S('09','Ciência e aprovação')}<div class="card">
  ${['T:Responsável técnico','S:Representante / solicitante'].map(x=>{const[k,l]=x.split(':');return`<div class="sig" data-s="${k}"><label>${l} — nome</label><input data-k="nome${k}" value="${esc(c['nome'+k])}"><label>Assinatura</label><canvas></canvas><button class="ghost" data-clr>Limpar</button></div>`}).join('')}
  <p style="font-size:12px;color:var(--mute)">O registro de ciência confirma o recebimento do relatório, não necessariamente a aceitação de pendências.</p></div>`;
- $('#bar').innerHTML='<button class="ghost" id="del">Excluir</button><button class="ghost" id="pdf">PDF</button><button id="send">Enviar ao SharePoint</button>';
+ $('#bar').innerHTML='<button class="ghost" id="del">Excluir</button><button class="ghost" id="pdf">PDF</button><button id="send">Enviar relatório</button>';
  bind();
 }
 function bind(){
@@ -208,14 +208,15 @@ async function makePdf(c){
 /* ---------- entrega: baixar / compartilhar / SharePoint ---------- */
 const ENDPOINT_PADRAO='';  // cole aqui a URL do fluxo Power Automate para já vir configurado
 const getUrl=()=>{try{return localStorage.sp_url||ENDPOINT_PADRAO}catch{return ENDPOINT_PADRAO}};
-async function deliver(f){
+async function deliver(f,mail){
  const file=new File([f.blob],f.name,{type:'application/pdf'});
- if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:f.name});return}catch(e){if(e.name==='AbortError')return}}
+ if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:f.name,text:mail?'Relatório de visita técnica '+cur.num:undefined});return}catch(e){if(e.name==='AbortError')return}}
  const a=document.createElement('a');a.href=URL.createObjectURL(f.blob);a.download=f.name;a.click();
+ if(mail)alert('PDF baixado. Anexe-o a um e-mail para a caixa de recebimento dos relatórios.');
 }
 async function sendSP(){
  const url=getUrl();
- if(!url){if(confirm('O envio ao SharePoint ainda não foi configurado. Configurar agora?'))cfg();return}
+ if(!url){const f=await makePdf(cur);cur.enviado=Date.now();await save();await deliver(f,true);return}
  const b=$('#send');b.disabled=true;b.textContent='Gerando PDF…';
  try{
   const f=await makePdf(cur);b.textContent='Enviando…';
@@ -225,7 +226,7 @@ async function sendSP(){
   catch(e){if(e instanceof TypeError){ok=true;conf=false}else throw e}  // CORS: requisição foi enviada, mas a resposta não é legível
   if(ok){cur.enviado=Date.now();await save();alert(conf?'Enviado ao SharePoint ✔':'Enviado, mas sem confirmação do servidor. Confira na pasta do SharePoint.')}
  }catch(e){alert('Falha no envio: '+e.message+'\nO relatório continua salvo no aparelho; tente novamente com internet.')}
- finally{b.disabled=false;b.textContent='Enviar ao SharePoint'}
+ finally{b.disabled=false;b.textContent='Enviar relatório'}
 }
 function cfg(){const v=prompt('URL do fluxo Power Automate (HTTP) que salva o PDF na pasta do SharePoint:',getUrl());if(v!==null){try{localStorage.sp_url=v.trim()}catch{}}}
 $('#cfg').onclick=cfg;
