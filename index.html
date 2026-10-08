@@ -104,7 +104,7 @@ function form(){
  ${S('03','Atividades executadas')}<div class="card">${rowsHtml('ativ',[{k:'a',l:'Atividade / procedimento',ta:1,w:1},{k:'r',l:'Resultado / evidência',ta:1,w:1}],'Atividade')}</div>
  ${S('04','Materiais, peças ou recursos')}<div class="card">${rowsHtml('mat',[{k:'d',l:'Descrição',w:1},{k:'q',l:'Qtd.'},{k:'o',l:'Observação'}],'Material')}</div>
  ${S('05','Evidências fotográficas')}<div class="card">${c.fotos.map((p,i)=>`<div class="row photo" data-l="fotos" data-i="${i}"><img src="${p.img}"><label>Momento</label><select data-f="m">${['Antes','Durante','Depois'].map(o=>`<option ${p.m==o?'selected':''}>${o}</option>`).join('')}</select><label>O que a foto comprova</label><textarea data-f="d">${esc(p.d)}</textarea><button class="del" data-rm>Remover</button></div>`).join('')}
- <label class="pick">📷 Tirar / escolher foto<input type="file" id="foto" accept="image/*" multiple hidden></label></div>
+ <label class="pick">📷 Tirar foto<input type="file" id="foto" accept="image/*" capture="environment" hidden></label><label class="pick" style="padding:12px">🖼 Escolher da galeria<input type="file" id="fotog" accept="image/*" multiple hidden></label></div></div>
  ${S('06','Testes, validações e resultados')}<div class="card">${rowsHtml('testes',[{k:'t',l:'Teste / verificação',w:1},{k:'r',l:'Resultado'},{k:'s',l:'Status',sel:['Aprovado','Pendente','Reprovado']}],'Teste')}</div>
  ${S('07','Pendências, riscos e próximos passos')}<div class="card">${rowsHtml('pend',[{k:'d',l:'Pendência / recomendação',ta:1,w:1},{k:'r',l:'Responsável'},{k:'p',l:'Prazo',t:'date'}],'Pendência')}</div>
  ${S('08','Conclusão da visita')}<div class="card">${T('concl','Condição encontrada, serviços concluídos, limitações e situação final')}
@@ -126,7 +126,7 @@ function bind(){
   if(t.dataset.add){const m={ativ:{a:'',r:''},mat:{d:'',q:'',o:''},testes:{t:'',r:'',s:'Pendente'},pend:{d:'',r:'',p:''}};cur[t.dataset.add].push(m[t.dataset.add]);keep()}
   if(t.dataset.rm!==undefined){const r=t.closest('[data-l]');cur[r.dataset.l].splice(+r.dataset.i,1);if(!cur[r.dataset.l].length&&r.dataset.l!=='fotos')cur[r.dataset.l].push({});keep()}
  };
- $('#foto').onchange=async e=>{for(const f of e.target.files)cur.fotos.push({img:await shrink(f),m:'Durante',d:''});keep()};
+ $('#foto').onchange=$('#fotog').onchange=async e=>{for(const f of e.target.files)cur.fotos.push({img:await shrink(f),m:'Durante',d:''});keep()};
  document.querySelectorAll('.sig').forEach(s=>sig(s));
  $('#del').onclick=async()=>{if(confirm('Excluir esta visita?')){await rm(cur.id);list()}};
  $('#pdf').onclick=async()=>{const f=await makePdf(cur);await deliver(f)};
