@@ -30,7 +30,7 @@ textarea{min-height:80px;resize:vertical}
 .row label{margin-top:4px}
 .item{display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer}
 .item b{display:block}.item span{color:var(--mute);font-size:13px}
-.tag{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--tint);color:var(--teal)}
+.tag.ok{background:#1F7F7B;color:#fff}.tag.warn{background:#f6c343;color:#3a2a00}.tag{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--tint);color:var(--teal)}
 .photo img{width:100%;border-radius:8px;display:block;margin-bottom:6px}
 .pick{display:block;text-align:center;border:2px dashed var(--teal);color:var(--teal);border-radius:8px;padding:22px;margin:6px 0;cursor:pointer}
 .sig canvas{width:100%;height:130px;border:1px dashed var(--mute);border-radius:8px;background:#fff;touch-action:none}
@@ -73,16 +73,25 @@ const all=()=>tx('readonly',s=>s.getAll());
 const put=r=>tx('readwrite',s=>s.put(r));
 const rm=id=>tx('readwrite',s=>s.delete(id));
 /* ---------- modelo ---------- */
-const blank=async()=>{const n=(await all()).length+1;return{id:uid(),num:`VT-${new Date().getFullYear()}-${String(n).padStart(3,'0')}`,data:new Date().toISOString().slice(0,10),ini:'',fim:'',local:'',empresa:'',resp:'',solic:'',objeto:'',escopo:'',
+const blank=async()=>{const y=new Date().getFullYear(),n=Math.max(0,...(await all()).map(r=>{const m=/^VT-(\d{4})-(\d+)$/.exec(r.num);return m&&+m[1]===y?+m[2]:0}))+1;return{id:uid(),num:`VT-${y}-${String(n).padStart(3,'0')}`,data:new Date().toISOString().slice(0,10),ini:'',fim:'',local:'',empresa:'',resp:'',solic:'',objeto:'',escopo:'',
  ativ:[{a:'',r:''}],mat:[{d:'',q:'',o:''}],fotos:[],testes:[{t:'',r:'',s:'Pendente'}],pend:[{d:'',r:'',p:''}],concl:'',sit:'',sigT:'',sigS:'',nomeT:'',nomeS:'',updated:Date.now()}};
 let cur=null;
 /* ---------- lista ---------- */
+let fil='todas',q='';
+const stat=r=>r.enviado?(r.alterado?['⟳ Alterada após envio','warn']:['✔ Enviada','ok']):(r.sit==='Concluído'?['Concluída','']:['Em andamento','']);
 async function list(){
  cur=null;$('#back').hidden=true;$('#title').innerHTML='Visitas técnicas<small>YBERA GROUP • Relatório técnico</small>';
  const rs=(await all()).sort((a,b)=>b.updated-a.updated);
- $('#app').innerHTML=rs.length?rs.map(r=>`<div class="card item" data-id="${r.id}"><div><b>${esc(r.num)} — ${esc(r.local)||'Sem local'}</b><span>${r.data.split('-').reverse().join('/')} • ${esc(r.objeto)||'—'}</span></div><span class="tag">${r.enviado?'✔ Enviado':(r.sit||'Em preenchimento')}</span></div>`).join(''):'<div class="empty">Nenhuma visita registrada ainda.</div>';
+ const ok=r=>{const st=stat(r)[0];const f=fil==='todas'||(fil==='andamento'&&!r.enviado&&r.sit!=='Concluído')||(fil==='pendente'&&(!r.enviado||r.alterado));
+  const t=(r.num+' '+r.local+' '+r.objeto+' '+r.resp+' '+r.empresa).toLowerCase();return f&&t.includes(q.toLowerCase())};
+ const vis=rs.filter(ok);
+ $('#app').innerHTML=`<input id="q" type="search" placeholder="Buscar por nº, local, objeto, responsável…" value="${esc(q)}" style="margin-top:6px">
+ <div style="display:flex;gap:6px;margin:10px 0;flex-wrap:wrap">${[['todas','Todas'],['andamento','Em andamento'],['pendente','Falta enviar']].map(([k,l])=>`<button class="${fil===k?'':'ghost'}" data-f="${k}" style="padding:6px 12px;font-size:14px">${l}</button>`).join('')}</div>`
+ +(vis.length?vis.map(r=>{const[t,c]=stat(r);return`<div class="card item" data-id="${r.id}"><div><b>${esc(r.num)} — ${esc(r.local)||'Sem local'}</b><span>${r.data.split('-').reverse().join('/')} • ${esc(r.objeto)||'—'}</span></div><span class="tag ${c}">${t}</span></div>`}).join(''):`<div class="empty">${rs.length?'Nenhuma visita encontrada.':'Nenhuma visita registrada ainda.'}</div>`);
  $('#bar').innerHTML='<button id="new">+ Nova visita</button>';
- $('#new').onclick=async()=>{cur=await blank();form()};
+ $('#new').onclick=async()=>{cur=await blank();await save();form()};
+ $('#q').oninput=e=>{q=e.target.value;const p=e.target.selectionStart;list().then(()=>{const i=$('#q');i.focus();i.setSelectionRange(p,p)})};
+ document.querySelectorAll('[data-f]').forEach(e=>e.onclick=()=>{fil=e.dataset.f;list()});
  document.querySelectorAll('.item').forEach(e=>e.onclick=async()=>{cur=(await all()).find(r=>r.id===e.dataset.id);form()});
 }
 /* ---------- formulário ---------- */
@@ -93,7 +102,7 @@ function rowsHtml(list,fields,addLabel){
  return cur[list].map((x,i)=>`<div class="row" data-l="${list}" data-i="${i}"><div class="g">${fields.map(f=>`<div class="${f.w?'w':''}"><label>${f.l}</label>${f.sel?`<select data-f="${f.k}">${f.sel.map(o=>`<option ${x[f.k]==o?'selected':''}>${o}</option>`).join('')}</select>`:f.ta?`<textarea data-f="${f.k}">${esc(x[f.k])}</textarea>`:`<input data-f="${f.k}" ${f.t?`type="${f.t}"`:''} value="${esc(x[f.k])}">`}</div>`).join('')}</div><button class="del" data-rm>Remover</button></div>`).join('')+`<button class="ghost" data-add="${list}">+ ${addLabel}</button>`;
 }
 function form(){
- $('#back').hidden=false;$('#title').innerHTML=`${esc(cur.num)}<small>Relatório de visita técnica</small>`;
+ $('#back').hidden=false;$('#title').innerHTML=`${esc(cur.num)}<small>${cur.enviado?(cur.alterado?'Alterada após o envio — reenvie':'Enviada — pode editar e reenviar'):'Salvo automaticamente neste aparelho'}</small>`;
  const c=cur;
  $('#app').innerHTML=`
  ${S('01','Identificação da visita')}<div class="card">
@@ -133,7 +142,7 @@ function bind(){
  $('#send').onclick=sendSP;
 }
 const keep=async()=>{const y=scrollY;await save();form();scrollTo(0,y)};
-let st;const save=()=>{cur.updated=Date.now();clearTimeout(st);return put(cur)};
+let st;const save=()=>{if(cur.enviado&&Date.now()-cur.enviado>3000)cur.alterado=true;cur.updated=Date.now();clearTimeout(st);return put(cur)};
 const shrink=f=>new Promise(ok=>{const i=new Image();i.onload=()=>{const s=Math.min(1,1280/Math.max(i.width,i.height));const c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;c.getContext('2d').drawImage(i,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',.75))};i.src=URL.createObjectURL(f)});
 /* ---------- assinatura ---------- */
 function sig(box){
@@ -216,7 +225,7 @@ async function deliver(f,mail){
 }
 async function sendSP(){
  const url=getUrl();
- if(!url){const f=await makePdf(cur);cur.enviado=Date.now();await save();await deliver(f,true);return}
+ if(!url){const f=await makePdf(cur);cur.enviado=Date.now();cur.alterado=false;await save();await deliver(f,true);return}
  const b=$('#send');b.disabled=true;b.textContent='Gerando PDF…';
  try{
   const f=await makePdf(cur);b.textContent='Enviando…';
@@ -224,7 +233,7 @@ async function sendSP(){
   let ok=false,conf=true;
   try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},body});ok=r.ok;if(!r.ok)throw new Error('HTTP '+r.status)}
   catch(e){if(e instanceof TypeError){ok=true;conf=false}else throw e}  // CORS: requisição foi enviada, mas a resposta não é legível
-  if(ok){cur.enviado=Date.now();await save();alert(conf?'Enviado ao SharePoint ✔':'Enviado, mas sem confirmação do servidor. Confira na pasta do SharePoint.')}
+  if(ok){cur.enviado=Date.now();cur.alterado=false;await save();alert(conf?'Enviado ao SharePoint ✔':'Enviado, mas sem confirmação do servidor. Confira na pasta do SharePoint.')}
  }catch(e){alert('Falha no envio: '+e.message+'\nO relatório continua salvo no aparelho; tente novamente com internet.')}
  finally{b.disabled=false;b.textContent='Enviar relatório'}
 }
@@ -232,11 +241,11 @@ function cfg(){const v=prompt('URL do fluxo Power Automate (HTTP) que salva o PD
 $('#cfg').onclick=cfg;
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 /* ---------- backup ---------- */
-$('#back').onclick=list;
+$('#back').onclick=async()=>{if(cur&&!cur.local&&!cur.objeto&&!cur.escopo&&!cur.fotos.length&&!cur.enviado)await rm(cur.id);list()};
 $('#exp').onclick=async()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(await all())],{type:'application/json'}));a.download=`visitas_ybera_${new Date().toISOString().slice(0,10)}.json`;a.click()};
 $('#imp').onclick=()=>$('#impf').click();
 $('#impf').onchange=async e=>{try{const rs=JSON.parse(await e.target.files[0].text());for(const r of rs)await put(r);list()}catch{alert('Arquivo inválido')}};
-open().then(list);
+open().then(()=>{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();list()});
 </script>
 </body>
 </html>
